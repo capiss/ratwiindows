@@ -1,0 +1,8 @@
+C:\Users\THPDmontes\Documents\a\Firefoxpass\firefox\bin\Release\firefox.exe.config
+C:\Users\THPDmontes\Documents\a\Firefoxpass\firefox\bin\Release\firefox.exe
+C:\Users\THPDmontes\Documents\a\Firefoxpass\firefox\bin\Release\firefox.pdb
+C:\Users\THPDmontes\Documents\a\Firefoxpass\firefox\bin\Release\Newtonsoft.Json.dll
+C:\Users\THPDmontes\Documents\a\Firefoxpass\firefox\bin\Release\Newtonsoft.Json.xml
+C:\Users\THPDmontes\Documents\a\Firefoxpass\firefox\obj\Release\firefox.csprojResolveAssemblyReference.cache
+C:\Users\THPDmontes\Documents\a\Firefoxpass\firefox\obj\Release\firefox.exe
+C:\Users\THPDmontes\Documents\a\Firefoxpass\firefox\obj\Release\firefox.pdb
