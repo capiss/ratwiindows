@@ -1,0 +1,8 @@
+c:\users\thpdmontes\documents\visual studio 2017\Projects\firefox\firefox\obj\Debug\firefox.csprojResolveAssemblyReference.cache
+c:\users\thpdmontes\documents\visual studio 2017\Projects\firefox\firefox\bin\Debug\firefox.exe.config
+c:\users\thpdmontes\documents\visual studio 2017\Projects\firefox\firefox\bin\Debug\firefox.exe
+c:\users\thpdmontes\documents\visual studio 2017\Projects\firefox\firefox\bin\Debug\firefox.pdb
+c:\users\thpdmontes\documents\visual studio 2017\Projects\firefox\firefox\bin\Debug\Newtonsoft.Json.dll
+c:\users\thpdmontes\documents\visual studio 2017\Projects\firefox\firefox\bin\Debug\Newtonsoft.Json.xml
+c:\users\thpdmontes\documents\visual studio 2017\Projects\firefox\firefox\obj\Debug\firefox.exe
+c:\users\thpdmontes\documents\visual studio 2017\Projects\firefox\firefox\obj\Debug\firefox.pdb
