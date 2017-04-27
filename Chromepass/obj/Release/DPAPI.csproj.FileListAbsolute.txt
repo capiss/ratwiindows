@@ -1,5 +1,0 @@
-C:\Users\THPDmontes\Downloads\Chrome-passwords-master\Chrome-passwords-master\DPAPI\bin\Release\DPAPI.exe
-C:\Users\THPDmontes\Downloads\Chrome-passwords-master\Chrome-passwords-master\DPAPI\bin\Release\DPAPI.pdb
-C:\Users\THPDmontes\Downloads\Chrome-passwords-master\Chrome-passwords-master\DPAPI\obj\Release\DPAPI.csprojResolveAssemblyReference.cache
-C:\Users\THPDmontes\Downloads\Chrome-passwords-master\Chrome-passwords-master\DPAPI\obj\Release\DPAPI.exe
-C:\Users\THPDmontes\Downloads\Chrome-passwords-master\Chrome-passwords-master\DPAPI\obj\Release\DPAPI.pdb
