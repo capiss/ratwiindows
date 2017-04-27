@@ -6,3 +6,10 @@ c:\users\thpdmontes\documents\visual studio 2017\Projects\firefox\firefox\bin\De
 c:\users\thpdmontes\documents\visual studio 2017\Projects\firefox\firefox\bin\Debug\Newtonsoft.Json.xml
 c:\users\thpdmontes\documents\visual studio 2017\Projects\firefox\firefox\obj\Debug\firefox.exe
 c:\users\thpdmontes\documents\visual studio 2017\Projects\firefox\firefox\obj\Debug\firefox.pdb
+C:\Users\THPDmontes\Documents\a\Firefoxpass\firefox\bin\Debug\firefox.exe.config
+C:\Users\THPDmontes\Documents\a\Firefoxpass\firefox\bin\Debug\firefox.exe
+C:\Users\THPDmontes\Documents\a\Firefoxpass\firefox\bin\Debug\firefox.pdb
+C:\Users\THPDmontes\Documents\a\Firefoxpass\firefox\bin\Debug\Newtonsoft.Json.dll
+C:\Users\THPDmontes\Documents\a\Firefoxpass\firefox\bin\Debug\Newtonsoft.Json.xml
+C:\Users\THPDmontes\Documents\a\Firefoxpass\firefox\obj\Debug\firefox.exe
+C:\Users\THPDmontes\Documents\a\Firefoxpass\firefox\obj\Debug\firefox.pdb
